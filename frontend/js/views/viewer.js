@@ -7,7 +7,12 @@ import { MODEL_EXTS } from "../model3d.js";
 
 const TEXT_LIMIT = 1024 * 1024;
 
-export function openViewer({ ctx, items, index = 0, onChange }) {
+/**
+ * Öffnet die Vorschau. Ohne `host` als Vollbild über allem; mit `host` als Vorschau-Spalte
+ * rechts neben der Dateiliste (große Bildschirme). `onShow(item)` meldet die angezeigte Datei.
+ */
+export function openViewer({ ctx, items, index = 0, onChange, host = null, onShow, onClose }) {
+  const pane = !!host;
   let i = index;
   let dirty = false;
   let model3d = null; // laufende 3D-Ansicht (muss beim Wechseln aufgeräumt werden)
@@ -18,25 +23,49 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
   const next = h("button", { class: "v-nav next", "aria-label": "Nächste" }, icon("chevronRight"));
   const dlBtn = h("button", { class: "btn icon", title: "Herunterladen" }, icon("download", "sm"));
   const moreBtn = h("button", { class: "btn icon", title: "Mehr" }, icon("more", "sm"));
-  const closeBtn = h("button", { class: "btn icon", title: "Schließen (Esc)" }, icon("x", "sm"));
-  const top = h("div", { class: "v-top" }, titleEl, dlBtn, moreBtn, closeBtn);
-  const root = h("div", { class: "viewer", role: "dialog", "aria-modal": "true" }, top, stage, prev, next);
-  document.body.append(root);
-  document.body.style.overflow = "hidden";
+  const closeBtn = h("button", { class: "btn icon", title: pane ? "Vorschau schließen (Esc)" : "Schließen (Esc)" }, icon("x", "sm"));
+  const fullBtn = pane ? h("button", { class: "btn icon", title: "Vollbild" }, icon("maximize", "sm")) : null;
+  const top = h("div", { class: "v-top" }, titleEl, dlBtn, moreBtn, fullBtn, closeBtn);
+  const root = pane
+    ? h("div", { class: "viewer pane", role: "region", "aria-label": "Vorschau" }, top, stage, prev, next)
+    : h("div", { class: "viewer", role: "dialog", "aria-modal": "true" }, top, stage, prev, next);
+  if (pane) host.append(root);
+  else { document.body.append(root); document.body.style.overflow = "hidden"; }
 
   const cur = () => items[i];
-  async function close() {
-    if (dirty && !(await confirmDialog({ title: "Änderungen verwerfen?", text: "Der Text wurde noch nicht gespeichert.", confirmText: "Verwerfen", danger: true }))) return;
+  let closed = false;
+  async function close({ force = false } = {}) {
+    if (closed) return true;
+    if (dirty && !force && !(await confirmDialog({ title: "Änderungen verwerfen?", text: "Der Text wurde noch nicht gespeichert.", confirmText: "Verwerfen", danger: true }))) return false;
+    closed = true;
     stop3d();
-    root.remove(); document.body.style.overflow = "";
+    root.remove();
     document.removeEventListener("keydown", onKey, true);
-    history.state?.fhViewer && history.back();
-    window.removeEventListener("popstate", onPop);
+    if (!pane) {
+      document.body.style.overflow = "";
+      history.state?.fhViewer && history.back();
+      window.removeEventListener("popstate", onPop);
+    }
+    onClose?.();
+    return true;
   }
   // Zurück-Taste (Handy) schließt die Vorschau statt die Seite zu wechseln
-  history.pushState({ fhViewer: true }, "");
-  const onPop = () => { if (document.body.contains(root)) { stop3d(); root.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey, true); window.removeEventListener("popstate", onPop); } };
-  window.addEventListener("popstate", onPop);
+  const onPop = () => { if (document.body.contains(root)) { closed = true; stop3d(); root.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey, true); window.removeEventListener("popstate", onPop); onClose?.(); } };
+  if (!pane) {
+    history.pushState({ fhViewer: true }, "");
+    window.addEventListener("popstate", onPop);
+  }
+  // Vorschau-Spalte → Vollbild (die Spalte bleibt dahinter offen)
+  fullBtn?.addEventListener("click", () => {
+    if (dirty) return toast("Erst speichern", "Der Text hat noch ungespeicherte Änderungen.", "info");
+    stop3d();
+    const full = openViewer({ ctx, items, index: i, onChange, onShow, onClose: () => {
+      if (!items.length) return close({ force: true });
+      const n = items.indexOf(full.item);
+      i = n >= 0 ? n : Math.min(i, items.length - 1);
+      show();
+    } });
+  });
 
   async function go(delta) {
     if (dirty && !(await confirmDialog({ title: "Änderungen verwerfen?", text: "Der Text wurde noch nicht gespeichert.", confirmText: "Verwerfen", danger: true }))) return;
@@ -70,6 +99,8 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
   });
 
   function onKey(e) {
+    if (pane && document.querySelector(".viewer:not(.pane)")) return; // Vollbild hat Vorrang
+    if (pane && e.key !== "Escape" && e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     if (document.querySelector(".overlay") || /input|textarea/i.test(document.activeElement?.tagName || "")) { if (e.key === "Escape" && document.activeElement?.tagName === "TEXTAREA") document.activeElement.blur(); return; }
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
     else if (e.key === "ArrowLeft") go(-1);
@@ -90,6 +121,7 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
   function show() {
     const item = cur();
     const path = A.itemPath(ctx, item);
+    onShow?.(item);
     clear(titleEl).append(h("strong", null, item.name),
       h("span", null, [items.length > 1 ? `${i + 1} von ${items.length}` : null, bytes(item.size), shortDate(item.mtime)].filter(Boolean).join(" · ")));
     prev.style.visibility = i > 0 ? "visible" : "hidden";
@@ -188,5 +220,5 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
   }
 
   show();
-  return close;
+  return { close, root, get item() { return cur(); } };
 }

@@ -14,7 +14,16 @@ const PAGE = 250;
 const prefs = (() => { try { return JSON.parse(localStorage.getItem("fh-prefs") || "{}"); } catch { return {}; } })();
 const savePrefs = () => { try { localStorage.setItem("fh-prefs", JSON.stringify(prefs)); } catch { /* */ } };
 
+// Ab dieser Fensterbreite öffnet sich die Vorschau rechts neben der Liste statt als Vollbild
+const WIDE = window.matchMedia("(min-width: 1180px)");
+
 export async function renderBrowser({ page, el, share, path, refreshShares, open }) {
+  // Aufteilung: links Dateien, rechts (auf großen Bildschirmen) die Vorschau
+  const paneHost = h("aside", { class: "preview-pane" });
+  const split = h("div", { class: "browse-split" }, h("div", { class: "browse-left" }), paneHost);
+  if (prefs.paneW) split.style.setProperty("--pane-w", `${prefs.paneW}px`);
+  el.append(split);
+  el = split.firstChild;
   const shareInfo = state.shares.find(s => s.name === share);
   const ctx = { share, path, writable: false };
   const v = {
@@ -208,7 +217,7 @@ export async function renderBrowser({ page, el, share, path, refreshShares, open
     const k = keyOf(item);
     const isSel = v.sel.has(k);
     const more = h("button", { class: "btn icon sm ghost", title: "Aktionen", onclick: (e) => { e.stopPropagation(); menu(item, more); } }, icon("more"));
-    const r = h("div", { class: `file-row ${isSel ? "sel" : ""} ${item.hidden ? "hidden-file" : ""}`, role: "row", tabindex: "0" },
+    const r = h("div", { class: `file-row ${isSel ? "sel" : ""} ${item.hidden ? "hidden-file" : ""} ${activeKey === k ? "active" : ""}`, role: "row", tabindex: "0", "data-key": k },
       h("div", { class: "cbx-cell" }, h("div", { class: "cbx", onclick: (e) => { e.stopPropagation(); toggleSel(item, idx, all, e.shiftKey); } }, icon("check"))),
       h("div", { class: "f-main" }, thumbOrIcon(item, 256),
         h("div", { style: { minWidth: 0 } }, h("div", { class: "f-name" }, item.name), h("div", { class: "f-sub" }, subline(item)))),
@@ -232,7 +241,7 @@ export async function renderBrowser({ page, el, share, path, refreshShares, open
         if (item.kind === "video") thumb.append(h("div", { class: "play" }, icon("play")));
       } else thumb.append(fileIcon(item));
       const more = h("button", { class: "btn icon sm ghost t-more", title: "Aktionen", onclick: (e) => { e.stopPropagation(); menu(item, more); } }, icon("more"));
-      const t = h("div", { class: `tile ${isSel ? "sel" : ""}`, tabindex: "0" },
+      const t = h("div", { class: `tile ${isSel ? "sel" : ""} ${activeKey === keyOf(item) ? "active" : ""}`, tabindex: "0", "data-key": keyOf(item) },
         h("div", { class: "cbx", onclick: (e) => { e.stopPropagation(); toggleSel(item, idx, all, e.shiftKey); } }, icon("check")),
         more, thumb, h("div", { class: "t-name" }, item.name), h("div", { class: "t-meta" }, item.dir ? "Ordner" : bytes(item.size)));
       bindItem(t, item, idx, all);
@@ -328,8 +337,49 @@ export async function renderBrowser({ page, el, share, path, refreshShares, open
     }
     const c = itemCtx(item);
     const list = (item.parent ? visible().filter(i => !i.dir && i.parent === item.parent) : visible().filter(i => !i.dir));
-    openViewer({ ctx: c, items: list, index: Math.max(0, list.indexOf(item)), onChange: reload });
+    const index = Math.max(0, list.indexOf(item));
+    if (usePane()) openPane(c, list, index);
+    else openViewer({ ctx: c, items: list, index, onChange: reload, onShow: (it) => setActive(it, false) });
   }
+
+  // ---------- Vorschau-Spalte (große Bildschirme) ----------
+  let paneCtl = null, activeKey = null;
+  const usePane = () => WIDE.matches && prefs.pane !== false;
+  function setActive(item, scroll = true) {
+    activeKey = item ? keyOf(item) : null;
+    body.querySelectorAll(".file-row.active, .tile.active").forEach(n => n.classList.remove("active"));
+    if (!activeKey) return;
+    const node = [...body.querySelectorAll("[data-key]")].find(n => n.dataset.key === activeKey);
+    if (node) { node.classList.add("active"); if (scroll) node.scrollIntoView({ block: "nearest" }); }
+  }
+  async function openPane(c, list, index) {
+    if (paneCtl && !(await paneCtl.close())) return;
+    split.classList.add("with-pane");
+    clear(paneHost).append(resizer);
+    paneCtl = openViewer({ ctx: c, items: list, index, onChange: reload, host: paneHost, onShow: (it) => setActive(it),
+      onClose: () => { paneCtl = null; split.classList.remove("with-pane"); setActive(null); } });
+  }
+  const closePane = () => paneCtl?.close({ force: true });
+  page.cleanup.push(closePane);
+  const onWide = () => { if (!WIDE.matches) closePane(); };
+  WIDE.addEventListener("change", onWide);
+  page.cleanup.push(() => WIDE.removeEventListener("change", onWide));
+  // Breite der Vorschau mit der Maus ziehen (wird gemerkt)
+  const resizer = h("div", { class: "pane-resizer", title: "Breite ändern" });
+  resizer.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    resizer.setPointerCapture(e.pointerId);
+    const right = split.getBoundingClientRect().right;
+    const move = (ev) => {
+      const w = Math.round(Math.min(Math.max(right - ev.clientX, 360), split.clientWidth - 380));
+      split.style.setProperty("--pane-w", `${w}px`);
+      prefs.paneW = w;
+    };
+    const up = () => { resizer.removeEventListener("pointermove", move); resizer.removeEventListener("pointerup", up); savePrefs(); window.dispatchEvent(new Event("resize")); };
+    resizer.addEventListener("pointermove", move);
+    resizer.addEventListener("pointerup", up);
+  });
+  resizer.addEventListener("dblclick", () => { delete prefs.paneW; savePrefs(); split.style.removeProperty("--pane-w"); });
 
   function menu(item, anchor) {
     const c = itemCtx(item);
@@ -383,6 +433,8 @@ export async function renderBrowser({ page, el, share, path, refreshShares, open
     "-",
     { icon: "download", label: "Ordner als ZIP herunterladen", onClick: () => A.downloadFolder(share, path, title) },
     !state.user.readonly ? { icon: "link", label: "Link zu diesem Ordner teilen", onClick: () => A.shareLink(ctx, null) } : null,
+    WIDE.matches ? { icon: "maximize", label: prefs.pane === false ? "Vorschau rechts neben der Liste" : "Vorschau als Vollbild öffnen",
+      onClick: () => { prefs.pane = prefs.pane === false; savePrefs(); if (prefs.pane === false) closePane(); toast(prefs.pane === false ? "Vorschau öffnet als Vollbild" : "Vorschau öffnet rechts neben der Liste"); } } : null,
     { icon: "refresh", label: "Aktualisieren", onClick: () => { refreshShares(); load(); } },
   ]));
 
@@ -420,7 +472,7 @@ export async function renderBrowser({ page, el, share, path, refreshShares, open
 
   // Tastatur
   page.on("keydown", (e) => {
-    if (document.querySelector(".overlay, .viewer") || /input|textarea|select/i.test(document.activeElement?.tagName || "")) return;
+    if (document.querySelector(".overlay, .viewer:not(.pane)") || /input|textarea|select/i.test(document.activeElement?.tagName || "")) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); visible().forEach(i => v.sel.add(keyOf(i))); draw(); }
     else if (e.key === "Escape" && v.sel.size) { v.sel.clear(); draw(); }
     else if ((e.key === "Delete" || (e.key === "Backspace" && e.metaKey)) && v.sel.size && ctx.writable) A.remove(ctx, selected(), () => { v.sel.clear(); reload(); });

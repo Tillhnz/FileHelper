@@ -770,3 +770,27 @@ body.has-uploads #toasts { bottom: calc(20px + var(--up-h, 120px)); }
 }
 .public-model { position: relative; width: 100%; height: min(64vh, 560px); border-radius: 14px; overflow: hidden; }
 @media (max-width: 860px) { .m3d-tools { gap: 4px; } .m3d-tools .btn { padding: 0 8px; font-size: 12.5px; } }
+
+/* ---------- Vorschau rechts neben der Liste (große Bildschirme) ---------- */
+.browse-left { min-width: 0; container-type: inline-size; }
+.preview-pane { display: none; }
+.browse-split.with-pane { display: grid; grid-template-columns: minmax(0, 1fr) var(--pane-w, min(46%, 900px)); gap: 22px; align-items: start; }
+.browse-split.with-pane .preview-pane { display: block; position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 420px; }
+.main:has(.browse-split.with-pane) { max-width: none; }
+.viewer.pane { position: relative; inset: auto; z-index: auto; height: 100%; border-radius: 18px; overflow: hidden; border: 1px solid var(--line);
+  box-shadow: var(--shadow); animation: fade .15s ease; }
+.viewer.pane .v-nav { width: 40px; height: 40px; }
+.viewer.pane .v-nav.prev { left: 10px; } .viewer.pane .v-nav.next { right: 10px; }
+.viewer.pane .v-text { padding-top: 64px; }
+.viewer.pane .m3d-tools .btn { padding: 0 9px; }
+.pane-resizer { position: absolute; left: -16px; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 6; }
+.pane-resizer::after { content: ""; position: absolute; left: 5px; top: 50%; width: 3px; height: 44px; margin-top: -22px; border-radius: 99px;
+  background: var(--line-strong); transition: background .12s, height .12s; }
+.pane-resizer:hover::after, .pane-resizer:active::after { background: var(--accent); height: 80px; margin-top: -40px; }
+.file-row.active { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.tile.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+/* Schmale Liste neben der Vorschau: Datumsspalte ausblenden */
+@container (max-width: 640px) {
+  .files-head, .file-row { grid-template-columns: 34px minmax(0, 1fr) 84px 40px; }
+  .files-head > :nth-child(4), .file-row .f-date { display: none; }
+}
