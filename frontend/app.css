@@ -794,3 +794,5 @@ body.has-uploads #toasts { bottom: calc(20px + var(--up-h, 120px)); }
   .files-head, .file-row { grid-template-columns: 34px minmax(0, 1fr) 84px 40px; }
   .files-head > :nth-child(4), .file-row .f-date { display: none; }
 }
+.plain-list { margin: 0; padding-left: 20px; color: var(--text-2); }
+.plain-list li { margin: 3px 0; }

@@ -254,6 +254,12 @@ def settings() -> dict:
     return load()["settings"]
 
 
+def set_setting(key: str, value) -> None:
+    with _lock:
+        settings()[key] = value
+        save()
+
+
 def set_share_settings(name: str, *, label: str | None, hidden: bool | None) -> None:
     with _lock:
         s = settings()

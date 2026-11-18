@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import re
 import secrets
@@ -20,7 +19,7 @@ from starlette.responses import FileResponse, JSONResponse, Response, StreamingR
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from . import fsops, store, thumbs
+from . import fsops, store, thumbs, updatewatch
 from .fsops import FsError
 
 BASE = Path(__file__).resolve().parent.parent
@@ -794,18 +793,6 @@ async def public_page(request: Request):
 # ---------------------------------------------------------------------------
 # System: Version, Update, Zwischenspeicher
 # ---------------------------------------------------------------------------
-_latest = {"at": 0.0, "version": None}
-
-
-def _fetch_latest() -> str | None:
-    try:
-        url = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/VERSION"
-        with urllib.request.urlopen(url, timeout=6) as r:
-            return r.read().decode().strip()[:20]
-    except Exception:  # noqa: BLE001
-        return None
-
-
 def _vkey(v: str) -> tuple:
     return tuple(int(x) if x.isdigit() else 0 for x in re.split(r"[.-]", v or "0"))
 
@@ -815,13 +802,54 @@ async def system(request: Request):
     info = {"version": VERSION, "root": fsops.ROOT, "thumbs": {**thumbs.status(), "step": (FRONTEND / "vendor/occt/occt-import-js.wasm").exists()},
             "admin": u.admin}
     if u.admin:
-        if time.time() - _latest["at"] > 6 * 3600 or q(request, "check") == "1":
-            _latest.update(at=time.time(), version=await asyncio.to_thread(_fetch_latest))
-        info["latest"] = _latest["version"]
-        info["update"] = bool(_latest["version"] and _vkey(_latest["version"]) > _vkey(VERSION))
+        st = await asyncio.to_thread(updatewatch.check, q(request, "check") == "1")
+        info["latest"] = st.get("latest_version")
+        info["installed"] = st.get("installed")
+        info["changes"] = st.get("changes", [])[:20]
+        info["more"] = bool(st.get("more"))
+        info["check_error"] = st.get("error")
+        sec, _ = updatewatch.describe(st.get("changes", []))
+        info["security"] = sec
+        # Neue Commits zählen (auch Dependabot-Updates ohne neue Versionsnummer); ohne git: Versionsnummer
+        info["update"] = bool(st.get("behind")) if st.get("installed") else bool(info["latest"] and _vkey(info["latest"]) > _vkey(VERSION))
         info["cache"] = await asyncio.to_thread(thumbs.cache_size)
         info["repo"] = REPO
+        n = updatewatch.ntfy_settings()
+        info["ntfy"] = {"url": n["url"], "topic": n["topic"], "notify": n["notify"], "has_token": bool(n["token"]), "click": n["click"]}
     return JSONResponse(info)
+
+
+async def notify_settings(request: Request):
+    need_admin(request)
+    data = await body_json(request)
+    cur = dict(store.settings().get("ntfy") or {})
+    topic = str(data.get("topic", cur.get("topic", ""))).strip()
+    if topic and not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", topic):
+        return err(400, "Das Thema darf nur Buchstaben, Zahlen, - und _ enthalten (max. 64 Zeichen).")
+    url = str(data.get("url", cur.get("url", "")) or "").strip().rstrip("/")
+    if url and not re.fullmatch(r"https?://[^\s/]+(/[^\s]*)?", url):
+        return err(400, "Ungültige ntfy-Adresse.")
+    click = str(data.get("click", cur.get("click", "")) or "").strip()
+    if click and not re.fullmatch(r"https?://\S+", click):
+        return err(400, "Ungültige Adresse von FileHelper.")
+    cur.update(topic=topic, url=url, notify=bool(data.get("notify", True)), click=click)
+    if "token" in data:  # leer lassen = unverändert, "-" = löschen
+        tok = str(data.get("token") or "").strip()
+        if tok == "-":
+            cur["token"] = ""
+        elif tok:
+            cur["token"] = tok
+    store.set_setting("ntfy", cur)
+    return JSONResponse({"ok": True})
+
+
+async def notify_test(request: Request):
+    need_admin(request)
+    try:
+        await asyncio.to_thread(updatewatch.push, "FileHelper: Test", "Push-Nachrichten kommen an. Du wirst bei neuen Versionen benachrichtigt.", 3, ("white_check_mark",))
+    except Exception as e:  # noqa: BLE001
+        return err(400, f"Senden fehlgeschlagen: {e}")
+    return JSONResponse({"ok": True})
 
 
 async def system_update(request: Request):
@@ -920,6 +948,8 @@ async def lifespan(app):
     if not store.users():
         print("FileHelper: Noch kein Benutzer angelegt. Im Container ausführen: filehelper passwd admin", flush=True)
     thumbs.maybe_prune()
+    if os.environ.get("FH_UPDATE_WATCH", "1") == "1":
+        updatewatch.start_background()
     yield
 
 
@@ -956,6 +986,8 @@ routes = [
     Route("/api/links/{lid}", links_delete, methods=["DELETE"]),
     Route("/api/system", system),
     Route("/api/system/update", system_update, methods=["POST"]),
+    Route("/api/system/notify", notify_settings, methods=["PUT"]),
+    Route("/api/system/notify/test", notify_test, methods=["POST"]),
     Route("/api/system/cache", cache_clear, methods=["DELETE"]),
     Route("/s/{token}", public_page),
     Route("/s/{token}/info", public_info),

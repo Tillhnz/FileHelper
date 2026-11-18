@@ -105,7 +105,7 @@ export async function renderSettings({ el, refreshShares, logout, setTheme, curr
     let s;
     try { s = await api("/system", { query: { check: check ? 1 : undefined } }); } catch (e) { clear(sysBox).append(callout("bad", null, e.message)); return; }
     const feat = (ok, label, hint) => h("div", { class: "row", style: { gap: "8px" } }, icon(ok ? "checkCircle" : "xCircle", "sm"), h("span", null, label), !ok && hint ? h("span", { class: "muted small" }, hint) : null);
-    const updBtn = h("button", { class: `btn ${s.update ? "primary" : ""}` }, icon(s.update ? "download" : "refresh", "sm"), s.update ? `Auf ${s.latest} aktualisieren` : "Nach Updates suchen");
+    const updBtn = h("button", { class: `btn ${s.update ? "primary" : ""}` }, icon(s.update ? "download" : "refresh", "sm"), s.update ? "Jetzt aktualisieren" : "Nach Updates suchen");
     updBtn.addEventListener("click", () => withBusy(updBtn, async () => {
       if (!s.update) { await drawSystem(true); return; }
       try {
@@ -119,8 +119,14 @@ export async function renderSettings({ el, refreshShares, logout, setTheme, curr
     clear(sysBox).append(h("div", { class: "card" },
       h("div", { class: "row wrap", style: { gap: "12px" } },
         h("div", { style: { flex: 1, minWidth: "200px" } }, h("div", { style: { fontWeight: 700, fontSize: "16px" } }, `FileHelper ${s.version}`),
-          h("div", { class: "muted small" }, s.latest ? (s.update ? `Neue Version ${s.latest} verfügbar` : "Du hast die neueste Version.") : "Update-Prüfung nicht möglich (kein Internet?)")),
+          h("div", { class: "muted small" }, s.check_error ? "Update-Prüfung gerade nicht möglich (kein Internet?)"
+            : s.update ? `${s.changes.length}${s.more ? "+" : ""} neue ${s.changes.length === 1 ? "Änderung" : "Änderungen"} auf GitHub${s.latest && s.latest !== s.version ? ` · Version ${s.latest}` : ""}`
+            : `Du hast den neuesten Stand${s.installed ? ` (${s.installed})` : ""}.`)),
+        s.update && s.security ? h("span", { class: "badge warn" }, icon("shield", "sm"), "Sicherheitsupdate") : null,
         updBtn),
+      s.update && s.changes.length ? h("details", { style: { marginTop: "12px" } },
+        h("summary", { class: "muted small", style: { cursor: "pointer", fontWeight: 600 } }, "Was ist neu?"),
+        h("ul", { class: "plain-list small", style: { marginTop: "8px" } }, s.changes.map(c => h("li", null, c.subject)))) : null,
       h("div", { class: "menu-sep", style: { margin: "16px 0" } }),
       h("div", { class: "stack", style: { gap: "8px" } },
         feat(s.thumbs.pillow, "Vorschaubilder für Fotos", "Pillow fehlt"),
@@ -132,7 +138,36 @@ export async function renderSettings({ el, refreshShares, logout, setTheme, curr
         h("a", { href: `https://github.com/${s.repo}`, target: "_blank", rel: "noopener" }, s.repo))));
   }
 
-  await Promise.all([drawShares(), drawUsers(), drawSystem()]);
+  // Benachrichtigungen (ntfy) – wie bei den anderen Helpern
+  const notifyBox = h("div", null, loader());
+  el.append(h("h2", { class: "section" }, icon("info", "sm"), "Benachrichtigungen"), notifyBox);
+  async function drawNotify() {
+    let s;
+    try { s = (await api("/system")).ntfy; } catch (e) { clear(notifyBox).append(callout("bad", null, e.message)); return; }
+    const d = { topic: s.topic, url: s.url, notify: s.notify, token: "", click: s.click || "" };
+    const save = h("button", { class: "btn primary" }, icon("check", "sm"), "Speichern");
+    const test = h("button", { class: "btn", disabled: !s.topic }, icon("sparkle", "sm"), "Test-Nachricht");
+    save.addEventListener("click", () => withBusy(save, async () => {
+      try { await api("/system/notify", { method: "PUT", body: d }); toast("Gespeichert", d.topic ? `Updates kommen über ntfy, Thema „${d.topic}“.` : "Push-Nachrichten sind aus."); drawNotify(); }
+      catch (e) { errorToast(e); }
+    }));
+    test.addEventListener("click", () => withBusy(test, async () => {
+      try { await api("/system/notify/test", { method: "POST" }); toast("Test gesendet", "Schau in die ntfy-App."); } catch (e) { errorToast(e); }
+    }));
+    clear(notifyBox).append(h("div", { class: "card" },
+      h("p", { class: "muted", style: { margin: "0 0 16px" } }, "Wie bei den anderen Helpern: Sobald auf GitHub eine neue Version liegt – auch automatisch übernommene Sicherheitsupdates von Dependabot –, kommt eine Push-Nachricht über die App ntfy. Sicherheitsupdates mit hoher Priorität. Geprüft wird alle 6 Stunden."),
+      h("div", { class: "stack", style: { gap: "16px" } },
+        h("div", { class: "form-grid" },
+          field("ntfy-Thema", input({ value: d.topic, placeholder: "z. B. till-homelab", autocapitalize: "off", oninput: (e) => { d.topic = e.target.value.trim(); } }), "Dasselbe Thema wie bei den anderen Helpern abonnieren. Leer = aus."),
+          field("ntfy-Server", input({ value: d.url, placeholder: "https://ntfy.sh", autocapitalize: "off", oninput: (e) => { d.url = e.target.value.trim(); } }))),
+        h("div", { class: "form-grid" },
+          field("Zugangstoken", input({ type: "password", placeholder: s.has_token ? "gespeichert – leer lassen = unverändert" : "nur bei geschütztem Thema", autocomplete: "off", oninput: (e) => { d.token = e.target.value.trim(); } })),
+          field("Adresse von FileHelper", input({ value: d.click, placeholder: "z. B. https://dateien.all-heinzen.de", autocapitalize: "off", oninput: (e) => { d.click = e.target.value.trim(); } }), "Optional: Tippen auf die Nachricht öffnet die Einstellungen.")),
+        toggle("Bei neuen Versionen benachrichtigen", null, d.notify, (v) => { d.notify = v; })),
+      h("div", { class: "sheet-foot", style: { marginTop: "16px" } }, test, save)));
+  }
+
+  await Promise.all([drawShares(), drawUsers(), drawSystem(), drawNotify()]);
 }
 
 function versionLine() {

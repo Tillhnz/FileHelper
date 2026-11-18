@@ -152,10 +152,18 @@ FH_THUMB_CACHE_MB=2048
 # Repository für Updates
 FH_REPO=${REPO}
 FH_BRANCH=${BRANCH}
+
+# Push-Nachricht bei neuen Versionen und Sicherheitsupdates (App „ntfy“, Thema abonnieren), leer = aus.
+# Lässt sich auch in der Oberfläche unter Einstellungen → Benachrichtigungen einstellen.
+FH_NTFY_TOPIC=${FH_NTFY_TOPIC:-}
+#FH_NTFY_URL=https://ntfy.sh
+#FH_NTFY_TOKEN=
 EOF
   chmod 600 "$ENV_FILE"
   ok "Konfiguration: $ENV_FILE"
 else
+  # Ältere Installationen: neue Einstellungen ergänzen
+  grep -q '^#\?FH_NTFY_TOPIC=' "$ENV_FILE" || printf '\n# Push-Nachricht bei neuen Versionen (App „ntfy“), leer = aus\nFH_NTFY_TOPIC=%s\n#FH_NTFY_URL=https://ntfy.sh\n' "${FH_NTFY_TOPIC:-}" >> "$ENV_FILE"
   grep -q '^FH_REPO=' "$ENV_FILE" && sed -i "s#^FH_REPO=.*#FH_REPO=${REPO}#" "$ENV_FILE" || echo "FH_REPO=${REPO}" >> "$ENV_FILE"
 fi
 mkdir -p "$STATE_DIR" /mnt

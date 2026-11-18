@@ -78,6 +78,13 @@ Ist eine Freigabe nur lesbar, zeigt FileHelper „nur lesen“ an und sperrt Hoc
 
 FileHelper selbst spricht nur HTTP im Heimnetz. Für eine Adresse wie `dateien.all-heinzen.de` im **Nginx Proxy Manager** einen Proxy-Host auf `http://<IP-des-Containers>:8080` anlegen (mit SSL, „Websockets“ nicht nötig). Danach in `/etc/filehelper.env` die IP des Proxy Managers bei `FH_TRUSTED_PROXIES` eintragen, damit die Sperre nach Fehlversuchen die echte Besucher-IP sieht. Geteilte Links funktionieren dann auch für andere.
 
+## Updates & Sicherheit (wie bei den anderen Helpern)
+
+- **Dependabot** prüft wöchentlich die Python-Pakete und GitHub Actions; Sicherheitslücken bekommen sofort einen eigenen Pull Request (in GitHub: *Settings → Code security → Dependabot alerts / security updates*).
+- **Automatisch übernommen** werden kleine Updates und Sicherheitskorrekturen, sobald die Tests (CI) grün sind; große Versionssprünge bleiben zum Ansehen liegen.
+- **Sicherheitsprüfung** (`pip-audit`) läuft bei jeder Änderung und jeden Morgen; findet sie eine Lücke, schickt GitHub eine E-Mail.
+- **Push-Nachricht** über [ntfy](https://ntfy.sh): FileHelper schaut alle 6 Stunden auf GitHub nach neuen Commits – auch automatisch übernommenen Dependabot-Updates – und meldet jede neue Version einmal, Sicherheitsupdates mit hoher Priorität. Thema unter *Einstellungen → Benachrichtigungen* eintragen (oder `FH_NTFY_TOPIC` in `/etc/filehelper.env`, bzw. `NTFY_TOPIC=…` beim Installieren).
+
 ## Aktualisieren & Befehle
 
 - In der Oberfläche: **Einstellungen → System → Auf … aktualisieren**

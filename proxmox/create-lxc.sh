@@ -20,6 +20,7 @@
 #    PORT=8080              Port der Oberfläche
 #    SHARES=                Ordner des Hosts, die gleich angezeigt werden sollen, z. B.
 #                           SHARES="/mnt/pve/nas-fotos,/mnt/pve/nas-dokumente"
+#    NTFY_TOPIC=            ntfy-Thema für Push-Nachrichten bei Updates (wie bei den anderen Helpern)
 #    NONINTERACTIVE=1       keine Rückfragen
 # ===========================================================================
 set -euo pipefail
@@ -181,7 +182,7 @@ step "Installiere FileHelper im Container (dauert 1–3 Minuten) …"
 ADMIN_PW="$(tr -dc 'A-HJ-NP-Za-km-z2-9' </dev/urandom | head -c 12 || true)"
 pct exec "$CTID" -- bash -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates >/dev/null"
 SCRIPT="$(curl -fsSL "${RAW}/install.sh")" || die "install.sh konnte nicht geladen werden (${RAW}/install.sh)."
-pct exec "$CTID" -- env FH_REPO="$REPO" FH_BRANCH="$BRANCH" FH_PORT="$PORT" FH_ADMIN_PASSWORD="$ADMIN_PW" bash -c "$SCRIPT"
+pct exec "$CTID" -- env FH_REPO="$REPO" FH_BRANCH="$BRANCH" FH_PORT="$PORT" FH_ADMIN_PASSWORD="$ADMIN_PW" FH_NTFY_TOPIC="${NTFY_TOPIC:-}" bash -c "$SCRIPT"
 
 CT_IP="$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}')"
 echo
