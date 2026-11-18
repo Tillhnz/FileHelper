@@ -51,7 +51,10 @@ jobs:
           # Major-Sprünge (z. B. „from 4.2.1 to 5.0.0“) nicht automatisch – auch in Sammel-PRs, die mehrere Pakete
           # nur im Text aufzählen („Updates `vite` from 7.1.0 to 8.3.6“)
           body=$(gh pr view "$num" --json body --jq .body)
-          major=$(printf '%s\n%s\n' "$title" "$body" | grep -oE 'from v?[0-9]+[^ ]* to v?[0-9]+' | awk '{split($2,a,".");split($4,b,".");gsub("v","",a[1]);gsub("v","",b[1]);if(a[1]!=b[1])print}' | head -1)
+          # Auch Bereichs-Updates wie „from >=9.1.0 to >=9.2.0“ erkennen. „|| true“: Ohne Treffer liefert grep
+          # Fehlercode 1 – mit „set -o pipefail“ brach der Schritt sonst ab, bevor überhaupt übernommen wurde.
+          major=$(printf '%s\n%s\n' "$title" "$body" | grep -oE 'from [<>=~^]*v?[0-9][^ ]* to [<>=~^]*v?[0-9][^ ]*' \
+            | awk '{f=$2; t=$4; gsub(/[^0-9.]/,"",f); gsub(/[^0-9.]/,"",t); split(f,a,"."); split(t,b,"."); if (a[1] != b[1]) print}' | head -1 || true)
           if [ -n "$major" ]; then
             gh pr comment "$num" --body "Großer Versionssprung ($major) – bitte selbst prüfen. (Automatisch übernommen werden nur kleine Updates.)"
             exit 0

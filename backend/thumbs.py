@@ -97,7 +97,7 @@ def _render_image(path: str, size: int) -> bytes:
     img = ImageOps.exif_transpose(img)
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGBA" if "A" in img.getbands() or img.mode == "P" else "RGB")
-    img.thumbnail((size, size), Image.LANCZOS if size <= 512 else Image.BICUBIC)
+    img.thumbnail((size, size), Image.Resampling.LANCZOS if size <= 512 else Image.Resampling.BICUBIC)
     out = io.BytesIO()
     img.save(out, "WEBP", quality=80 if size <= 512 else 85, method=4)
     return out.getvalue()
