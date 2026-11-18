@@ -1,7 +1,8 @@
 // ===========================================================================
 // Öffentliche Seite eines geteilten Links (ohne Anmeldung)
 // ===========================================================================
-import { h, icon, clear, api, qs, bytes, shortDate, dateTime, fileIcon, loader, empty, callout, joinPath } from "./core.js";
+import { h, icon, clear, api, qs, bytes, shortDate, dateTime, fileIcon, loader, empty, callout, joinPath, extOf } from "./core.js";
+import { MODEL_EXTS, openModel } from "./model3d.js";
 
 const token = location.pathname.split("/")[2];
 const base = `/s/${encodeURIComponent(token)}`;
@@ -50,6 +51,10 @@ function single(info) {
   else if (info.kind === "image" && (!info.convert || info.thumb)) preview = h("img", { class: "preview", src: info.convert ? thumbHref("", 2048) : fileHref(""), alt: info.name });
   else if (info.kind === "video") preview = h("video", { src: fileHref(""), controls: true, playsinline: true, preload: "metadata" });
   else if (info.kind === "audio") preview = h("audio", { src: fileHref(""), controls: true, style: { width: "min(420px, 90vw)" } });
+  else if (info.kind === "model" && MODEL_EXTS.has(extOf(info.name)) && info.size < 400 * 1024 * 1024) {
+    preview = h("div", { class: "public-model" });
+    setTimeout(() => openModel(preview, { url: fileHref(""), ext: extOf(info.name), size: info.size }), 0);
+  }
   frame(h("div", { class: "card public-file" },
     preview || fileIcon(item),
     h("div", null, h("h1", null, info.name), h("div", { class: "muted", style: { marginTop: "6px" } }, [bytes(info.size), shortDate(info.mtime)].filter(Boolean).join(" · "))),

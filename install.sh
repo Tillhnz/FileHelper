@@ -109,6 +109,27 @@ fi
 ok "Python-Umgebung bereit"
 
 # ---------------------------------------------------------------------------
+# CAD-Leser für STEP/IGES (OpenCascade als WebAssembly, LGPL-2.1) – ca. 8 MB
+OCCT_VERSION="0.0.24"
+OCCT_DIR="$INSTALL_DIR/frontend/vendor/occt"
+if [[ "$(cat "$OCCT_DIR/VERSION" 2>/dev/null)" != "$OCCT_VERSION" ]]; then
+  step "CAD-Leser für STEP-Dateien laden …"
+  mkdir -p "$OCCT_DIR"
+  CDN="https://cdn.jsdelivr.net/npm/occt-import-js@${OCCT_VERSION}/dist"
+  if curl -fsSL "$CDN/occt-import-js.js" -o "$OCCT_DIR/occt-import-js.js.tmp" \
+    && curl -fsSL "$CDN/occt-import-js.wasm" -o "$OCCT_DIR/occt-import-js.wasm.tmp"; then
+    curl -fsSL "$CDN/license.occt-import-js.txt" -o "$OCCT_DIR/LICENSE.txt" 2>/dev/null || true
+    mv "$OCCT_DIR/occt-import-js.js.tmp" "$OCCT_DIR/occt-import-js.js"
+    mv "$OCCT_DIR/occt-import-js.wasm.tmp" "$OCCT_DIR/occt-import-js.wasm"
+    echo "$OCCT_VERSION" > "$OCCT_DIR/VERSION"
+    ok "STEP-Vorschau bereit"
+  else
+    rm -f "$OCCT_DIR"/*.tmp
+    echo "  ${C_DIM}Hinweis: Download fehlgeschlagen – STL geht, STEP-Dateien erst nach „filehelper update“.${C_OFF}"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 if [[ ! -f "$ENV_FILE" ]]; then
   step "Konfiguration anlegen …"
   cat > "$ENV_FILE" <<EOF

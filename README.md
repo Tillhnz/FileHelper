@@ -6,6 +6,7 @@ Deine Dateien von der NAS – mit einer schicken Oberfläche im Browser und auf 
 
 - **Alle Freigaben auf einen Blick** – jeder Ordner, der im Container unter `/mnt` eingebunden ist (z. B. NAS-Freigaben per NFS oder SMB), erscheint als eigene Freigabe mit freiem Speicherplatz
 - **Ansehen ohne Herunterladen** – Fotos (auch iPhone-HEIC und Kamera-RAW wie Fujifilm `.RAF`), Videos mit Vorspulen, Musik, PDFs und Textdateien; durchblättern mit Pfeiltasten oder Wischen
+- **3D-Modelle ansehen** – STL, STEP/STP, IGES und OBJ direkt im Browser drehen, zoomen und verschieben (auch per Touch), mit Maßen in mm, Druckbett-Raster und Ansichten Iso/Vorne/Seite/Oben; STEP-Farben werden übernommen. STEP/IGES liest der CAD-Kern OpenCascade ([occt-import-js](https://github.com/kovacsv/occt-import-js), LGPL-2.1), der beim Installieren geladen wird
 - **Vorschaubilder** für Fotos und Videos, Kachel- und Foto-Ansicht (Ordner voller Bilder öffnen automatisch als Kacheln)
 - **Herunterladen** – einzelne Dateien direkt, mehrere Dateien oder ganze Ordner als ZIP (wird beim Herunterladen erzeugt, ohne Zwischendatei)
 - **Hochladen** – Dateien und ganze Ordner, per Knopf oder einfach ins Fenster ziehen; große Dateien werden in Stücken übertragen (läuft auch hinter Proxys wie dem Nginx Proxy Manager) und nach Verbindungsabbrüchen fortgesetzt; Bildschirmfotos per Strg+V einfügen
@@ -103,7 +104,7 @@ Einstellungen stehen in `/etc/filehelper.env` (danach `filehelper restart`).
 
 ## Technik
 
-Python (Starlette/Uvicorn) und eine Oberfläche ohne Build-Schritt (Vanilla-JS, gleiche Bausteine wie die Proxmox Zentrale). Vorschaubilder mit Pillow (+ pillow-heif für HEIC) und ffmpeg für Videos; Zwischenspeicher unter `/var/lib/filehelper/thumbs` (Größe per `FH_THUMB_CACHE_MB`).
+Python (Starlette/Uvicorn) und eine Oberfläche ohne Build-Schritt (Vanilla-JS, gleiche Bausteine wie die Proxmox Zentrale). 3D-Ansicht mit eigenem WebGL-Betrachter, STEP/IGES über occt-import-js im Web Worker (nur dieser Worker darf WebAssembly/eval ausführen, die Seite selbst hat eine strenge CSP). Vorschaubilder mit Pillow (+ pillow-heif für HEIC) und ffmpeg für Videos; Zwischenspeicher unter `/var/lib/filehelper/thumbs` (Größe per `FH_THUMB_CACHE_MB`).
 
 Lokal ausprobieren:
 

@@ -3,12 +3,15 @@
 // ===========================================================================
 import { h, icon, clear, api, state, toast, errorToast, bytes, shortDate, fileUrl, thumbUrl, fileIcon, extOf, KIND_LABEL, openMenu, confirmDialog } from "../core.js";
 import * as A from "../actions.js";
+import { MODEL_EXTS } from "../model3d.js";
 
 const TEXT_LIMIT = 1024 * 1024;
 
 export function openViewer({ ctx, items, index = 0, onChange }) {
   let i = index;
   let dirty = false;
+  let model3d = null; // laufende 3D-Ansicht (muss beim Wechseln aufgeräumt werden)
+  const stop3d = () => { model3d?.destroy(); model3d = null; };
   const titleEl = h("div", { class: "v-title" });
   const stage = h("div", { class: "v-stage" });
   const prev = h("button", { class: "v-nav prev", "aria-label": "Vorherige" }, icon("chevronLeft"));
@@ -24,6 +27,7 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
   const cur = () => items[i];
   async function close() {
     if (dirty && !(await confirmDialog({ title: "Änderungen verwerfen?", text: "Der Text wurde noch nicht gespeichert.", confirmText: "Verwerfen", danger: true }))) return;
+    stop3d();
     root.remove(); document.body.style.overflow = "";
     document.removeEventListener("keydown", onKey, true);
     history.state?.fhViewer && history.back();
@@ -31,7 +35,7 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
   }
   // Zurück-Taste (Handy) schließt die Vorschau statt die Seite zu wechseln
   history.pushState({ fhViewer: true }, "");
-  const onPop = () => { if (document.body.contains(root)) { root.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey, true); window.removeEventListener("popstate", onPop); } };
+  const onPop = () => { if (document.body.contains(root)) { stop3d(); root.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey, true); window.removeEventListener("popstate", onPop); } };
   window.addEventListener("popstate", onPop);
 
   async function go(delta) {
@@ -75,7 +79,7 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
 
   // Wischen auf dem Handy
   let sx = 0, sy = 0, st = 0;
-  stage.addEventListener("touchstart", (e) => { if (e.touches.length !== 1) { sx = null; return; } sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); }, { passive: true });
+  stage.addEventListener("touchstart", (e) => { if (e.touches.length !== 1 || e.target.closest(".m3d")) { sx = null; return; } sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); }, { passive: true });
   stage.addEventListener("touchend", (e) => {
     if (sx === null || stage.classList.contains("zoomed") || (window.visualViewport && window.visualViewport.scale > 1.05)) return;
     const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
@@ -92,6 +96,7 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
     next.style.visibility = i < items.length - 1 ? "visible" : "hidden";
     root.classList.remove("chrome-off");
     stage.classList.remove("zoomed");
+    stop3d();
     clear(stage);
     const src = fileUrl(ctx.share, path);
     const ext = extOf(item.name);
@@ -122,6 +127,14 @@ export function openViewer({ ctx, items, index = 0, onChange }) {
     } else if (item.kind === "audio") {
       const aud = h("audio", { src, controls: true, autoplay: true });
       stage.append(h("div", { class: "v-audio" }, h("div", { class: "cover" }, icon("music")), h("strong", { style: { fontSize: "18px" } }, item.name), aud));
+    } else if (item.kind === "model" && MODEL_EXTS.has(ext)) {
+      if (["stp", "step", "igs", "iges"].includes(ext) && state.features && state.features.step === false) {
+        none(item, "Für STEP-Dateien fehlt noch der CAD-Leser. Im Container „filehelper update“ ausführen.");
+      } else if (item.size > 400 * 1024 * 1024) {
+        none(item, `Das Modell ist zu groß für die Vorschau im Browser (${bytes(item.size)}).`);
+      } else {
+        import("../model3d.js").then(({ openModel }) => { if (cur() === item) model3d = openModel(stage, { url: src, ext, size: item.size }); });
+      }
     } else if (item.kind === "pdf") {
       stage.append(h("iframe", { src, title: item.name }));
     } else if (item.kind === "text" || (item.size < 64 * 1024 && ["", "conf", "service"].includes(ext))) {

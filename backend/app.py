@@ -812,7 +812,8 @@ def _vkey(v: str) -> tuple:
 
 async def system(request: Request):
     u = need_user(request)
-    info = {"version": VERSION, "root": fsops.ROOT, "thumbs": thumbs.status(), "admin": u.admin}
+    info = {"version": VERSION, "root": fsops.ROOT, "thumbs": {**thumbs.status(), "step": (FRONTEND / "vendor/occt/occt-import-js.wasm").exists()},
+            "admin": u.admin}
     if u.admin:
         if time.time() - _latest["at"] > 6 * 3600 or q(request, "check") == "1":
             _latest.update(at=time.time(), version=await asyncio.to_thread(_fetch_latest))
@@ -863,7 +864,16 @@ async def index(request: Request):
 
 
 CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; "
-       "script-src 'self'; object-src 'none'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
+       "script-src 'self'; worker-src 'self'; object-src 'none'; frame-src 'self'; frame-ancestors 'self'; "
+       "base-uri 'none'; form-action 'self'")
+# Nur der Hintergrund-Leser für 3D-Modelle darf WebAssembly ausführen: Der STEP-Leser (OpenCascade,
+# mit Emscripten gebaut) braucht dafür eval. Ein Worker hat seine eigene CSP – die Seite selbst bleibt streng.
+WORKER_CSP = "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'"
+
+
+async def model_worker(request: Request):
+    return FileResponse(FRONTEND / "js" / "model-worker.js", media_type="text/javascript",
+                        headers={"Content-Security-Policy": WORKER_CSP, "Cache-Control": "no-cache"})
 
 
 class Guard:
@@ -955,6 +965,7 @@ routes = [
     Route("/s/{token}/thumb", public_thumb),
     Route("/s/{token}/zip", public_zip),
     Route("/", index),
+    Route("/static/js/model-worker.js", model_worker),
     Mount("/static", StaticFiles(directory=FRONTEND), name="static"),
 ]
 

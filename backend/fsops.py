@@ -31,6 +31,7 @@ for kind, exts in {
     "sheet": "xls xlsx ods numbers",
     "slides": "ppt pptx odp key",
     "design": "psd ai xcf drp drt fcpxml prproj aep",
+    "model": "stl stp step igs iges obj 3mf",
 }.items():
     for e in exts.split():
         EXT_KIND[e] = kind

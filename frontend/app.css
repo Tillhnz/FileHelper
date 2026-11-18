@@ -742,3 +742,31 @@ h2.section .spacer + .btn { margin-left: auto; }
 }
 body.has-uploads #toasts { bottom: calc(20px + var(--up-h, 120px)); }
 @media (max-width: 860px) { body.has-uploads #toasts { bottom: calc(80px + var(--safe-b) + var(--up-h, 120px)); } }
+
+/* ---------- 3D-Ansicht (STL, STEP …) ---------- */
+.k-model { background: #fff0e9; color: #e0571c; }
+:root[data-theme="dark"] .k-model { background: #2c1a12; color: #ff7a45; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .k-model { background: #2c1a12; color: #ff7a45; } }
+.m3d { position: absolute; inset: 0; overflow: hidden; background: #0b0e13; }
+.m3d:not(.dark) { background: #f2f3f6; }
+.m3d-canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.m3d-canvas:active { cursor: grabbing; }
+.m3d-status { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  color: rgba(255,255,255,.7); text-align: center; padding: 20px; }
+.m3d:not(.dark) .m3d-status { color: var(--muted); }
+.m3d-status.error { color: #ff8a8a; }
+.m3d-info { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 12px;
+  background: rgba(10,13,18,.72); color: #fff; font-size: 13px; pointer-events: none; backdrop-filter: blur(8px); }
+.m3d-info span { color: rgba(255,255,255,.65); font-size: 12px; }
+.m3d-tools { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 28px); }
+.m3d-tools .btn { background: rgba(10,13,18,.72); color: #fff; border-color: rgba(255,255,255,.12); backdrop-filter: blur(8px); }
+.m3d-tools .btn:hover { background: rgba(40,46,56,.9); }
+.m3d-tools .btn.on { border-color: var(--accent); color: #fff; background: color-mix(in srgb, var(--accent) 45%, rgba(10,13,18,.8)); }
+.viewer .v-stage .m3d { top: 0; }
+@media (max-width: 860px) {
+  .m3d-info { left: 10px; right: 10px; bottom: calc(60px + var(--safe-b)); align-items: center; }
+  .m3d-tools { left: 10px; right: 10px; bottom: calc(10px + var(--safe-b)); justify-content: center; max-width: none; flex-wrap: nowrap; overflow-x: auto; }
+  .m3d-tools .btn { flex: none; }
+}
+.public-model { position: relative; width: 100%; height: min(64vh, 560px); border-radius: 14px; overflow: hidden; }
+@media (max-width: 860px) { .m3d-tools { gap: 4px; } .m3d-tools .btn { padding: 0 8px; font-size: 12.5px; } }

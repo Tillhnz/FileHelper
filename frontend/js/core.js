@@ -206,9 +206,9 @@ export function plural(n, one, many) { return `${n.toLocaleString("de-DE")} ${n 
 
 // ---------- Dateiarten ----------
 const KIND_ICON = { folder: "folder", image: "image", video: "video", audio: "music", pdf: "fileText", text: "fileText",
-  archive: "zip", doc: "fileText", sheet: "table", slides: "slides", design: "pen", file: "file" };
+  archive: "zip", doc: "fileText", sheet: "table", slides: "slides", design: "pen", model: "box", file: "file" };
 export const KIND_LABEL = { folder: "Ordner", image: "Bild", video: "Video", audio: "Audio", pdf: "PDF", text: "Text", archive: "Archiv",
-  doc: "Dokument", sheet: "Tabelle", slides: "Präsentation", design: "Projektdatei", file: "Datei" };
+  doc: "Dokument", sheet: "Tabelle", slides: "Präsentation", design: "Projektdatei", model: "3D-Modell", file: "Datei" };
 export function extOf(name) { const i = name.lastIndexOf("."); return i > 0 ? name.slice(i + 1).toLowerCase() : ""; }
 export function fileIcon(item, { size } = {}) {
   const box = h("div", { class: `ficon k-${item.kind}` }, icon(KIND_ICON[item.kind] || "file"));
